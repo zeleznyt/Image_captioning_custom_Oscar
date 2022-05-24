@@ -56,3 +56,30 @@ conda activate oscar
 python oscar/run_captioning.py --do_test --test_yaml oscar/datasets/custom_sets/custom.yaml --per_gpu_eval_batch_size 64     --num_beams 5 --max_gen_length 20 --eval_model_dir checkpoints/final_checkpoint_from_training
 ```
 
+### Results
+
+| Metric | BLEU-4 | METEOR | CIDEr | SPICE|
+|-------|-------|-------|-------|-------|
+|Original Oscar | 0.417 | 0.306 | 1.40 | 0.245|
+|My pipeline | 0.312 | 0.272 | 1.02 | 0.201|
+
+## Ablation study
+
+Part of my work is experiment of removing individual modalities of Oscar while monitoring the output. It is done by creating a modified dataset with modality removed.
+
+### Running the data editor
+
+New datasets with removed modalities are created by following script:
+```
+python ablation/data_editor.py --input-path /Oscar/oscar/datasets/coco_caption --output-path /Oscar/oscar/datasets/coco_caption_edited --coco-classnames /input/ms_coco_classnames.txt --edited-images-ids /Oscar/oscar/datasets/coco_caption_edited/edited_images_ids.txt --old-prefix new.val2014. --new-prefix edited.new.
+```
+
+### Results
+
+|Metric | B-1 | B-2 | B-3 | B-4 | M | R-L | C-D|
+|-------|-------|-------|-------|-------|-------|-------|-------|
+|Full information | 0.697 | 0.526 | 0.393 | 0.296 | 0.265 | 0.531 | 0.977|
+|Features removed | 0.549 | 0.356 | 0.228 | 0.152 | 0.183 | 0.409 | 0.504|
+|Tags removed | 0.672 | 0.498 | 0.366 | 0.272 | 0.250 | 0.511 | 0.875|
+
+![ablation_results](assets/ablation.png)
