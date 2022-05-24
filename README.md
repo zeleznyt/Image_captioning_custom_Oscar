@@ -83,3 +83,4 @@ python ablation/data_editor.py --input-path /Oscar/oscar/datasets/coco_caption -
 |Tags removed | 0.672 | 0.498 | 0.366 | 0.272 | 0.250 | 0.511 | 0.875|
 
 ![ablation_results](assets/ablation.png)
+(1) - Detected objects by the detector, (2) - Prediction from full information, (3) - Prediction with features removed, (4) - Prediction with tags removed
