@@ -4,7 +4,7 @@ import json
 import shutil
 
 if __name__ == '__main__':
-    with open(sys.argv[1]) as f:
+    with open('/storage/plzen1/home/zeleznyt/DP/oscar/Oscar/oscar/datasets/custom_sets/custom.id_dictionary.txt') as f:
         content = f.readlines()
     id_dict = {}
 
@@ -12,7 +12,7 @@ if __name__ == '__main__':
        value, key = line.split()
        id_dict[key] = value
 
-    with open(sys.argv[2]) as f:
+    with open('/storage/plzen1/home/zeleznyt/DP/oscar/Oscar/checkpoints/checkpoint-finetune-7-5/pred.coco_caption.custom.beam5.max20.odlabels.tsv') as f:
         content = f.readlines()
     results = {}
     for line in content:
@@ -20,7 +20,7 @@ if __name__ == '__main__':
         results[key] = json.loads(rest)[0]['caption']
     # print(results['3'])
 
-    dataset_path = sys.argv[3]
+    dataset_path = '/storage/plzen1/home/zeleznyt/DP/dataset/custom'
     dataset_root = os.path.abspath(os.path.join(dataset_path, os.pardir))
     dataset_file = dataset_path.split('/')[-1]
     renamed_dataset_path = os.path.join(dataset_root, dataset_file+'_renamed')

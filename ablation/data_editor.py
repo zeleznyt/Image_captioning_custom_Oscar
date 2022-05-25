@@ -12,11 +12,11 @@ def get_parser():
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--old-prefix",
-        default='ablaset.'
+        default="ablaset."
     )
     parser.add_argument(
         "--new-prefix",
-        default='edited.ablaset.'
+        default="edited.ablaset"
     )
     parser.add_argument(
         "--input-path",
@@ -33,30 +33,14 @@ def get_parser():
         default="ms_coco_classnames.txt",
         help="File with coco classes names"
     )
-    # parser.add_argument(
-    #     "--edit-rect",
-    #     default=0,
-    #     # help="0 - no edit, 1 - adding noise, 2 - totally random"
-    # )
-    # parser.add_argument(
-    #     "--edit-feat",
-    #     default=0,
-    #     # help="0 - no edit, 1 - adding noise, 2 - totally random"
-    # )
-    # parser.add_argument(
-    #     "--edit-class",
-    #     default=0,
-    #     help="0 - no edit, >0 - random"
-    # )
-    # parser.add_argument(
-    #     "--edit-conf",
-    #     default=0,
-    #     # help="0 - no edit, 1 - adding noise, 2 - totally random"
-    # )
     parser.add_argument(
         "--edited-images-ids",
-        default='edited_images_ids.txt',
-        # help="0 - no edit, 1 - adding noise, 2 - totally random"
+        default="edited_images_ids.txt"
+    )
+    parser.add_argument(
+        "--modification",
+        default="",
+        help="One of following ones: drop_major, null_tags, null_feats, null_feats_change_class"
     )
     return parser
 
@@ -77,7 +61,6 @@ def load_data(feature_file, label_file):
         featsb = base64.b64decode(feat_dict['features'])
         num_boxes = int(feat_dict['num_boxes'])
         feats = np.frombuffer(featsb, dtype=np.float64)
-        # feats = feats.reshape(num_boxes, -1)
 
         data_info[id]['num_boxes'] = num_boxes
         data_info[id]['features'] = feats
@@ -99,6 +82,8 @@ def prep_files(data_info=None):
     with open(os.path.join(args.output_path, '{}yaml'.format(args.new_prefix)), 'w') as f:
         f.write('img: img.tsv\nhw: hw.tsv\nlabel: {}label.tsv\nfeature: {}feature.tsv'.format(args.new_prefix,
                                                                                               args.new_prefix))
+    with open(os.path.join(args.output_path, '{}drop_outliers.txt'.format(args.new_prefix)), 'w') as f:
+        pass
     if data_info is not None:
         len_feature = 0
         len_label = 0
@@ -124,7 +109,11 @@ def prep_files(data_info=None):
                 f.write(text)
         return len_feature, len_label
 
+
 def save_data(data_info, len_feature=0, len_label=0):
+    features_file = os.path.join(args.output_path, '{}feature.tsv'.format(args.new_prefix))
+    labels_file = os.path.join(args.output_path, '{}label.tsv'.format(args.new_prefix))
+
     for image_id in data_info.keys():
         with open(os.path.join(args.output_path, '{}feature.lineidx'.format(args.new_prefix)), 'a') as f:
             f.write('{}\n'.format(len_feature))
@@ -147,24 +136,35 @@ def save_data(data_info, len_feature=0, len_label=0):
             f.write(text)
 
 
-# def edit_data(_data, edit_rect=0, edit_feat=0, edit_class=0, edit_conf=0, start_idx=0):
-def edit_data(_data, modification, start_idx=0):
+def edit_data(_data, modification):
     new_data = copy.deepcopy(_data)
-    new_idx = start_idx
     for im_idx, im_id in enumerate(_data.keys()):
         im = new_data[im_id]
-        if modification == 'drop_some':
-            n = 1
-            dropped = []
-            for i in range(n):
-                if i > len(im['labels']):
-                    print('Image {} has not enough detections: {}'.format(im_id, n))
-                    break
-                dropped.append(im['labels'][0]['class'])
-                im['features'] = im['features'][len(im['features'])//im['num_boxes']:]
-                im['labels'] = im['labels'][1:]
-                im['num_boxes'] -= 1
-            mode2s = 'Dropped {}:{}'.format(n, dropped)
+        if modification == 'drop_major':
+            dropped_times = 0
+            major_class = im['labels'][0]['class']
+            new_im = {'labels': [], 'num_boxes': 0, 'features': np.array([])}
+            for idx, detection in enumerate(im['labels']):
+                if detection['class'] == major_class:
+                    dropped_times += 1
+                    continue
+                else:
+                    new_im['labels'].append(detection)
+                    new_im['num_boxes'] += 1
+                    oneFeatLen = len(im['features'])//im['num_boxes']
+                    if len(new_im['features']) > 0:
+                        new_im['features'] = np.concatenate((new_im['features'], im['features'][idx*oneFeatLen: (idx+1)*oneFeatLen]))
+                    else:
+                        new_im['features'] = im['features'][idx*oneFeatLen: (idx+1)*oneFeatLen]
+
+            if new_im['num_boxes'] < 1:
+                print('{} can not drop major class {} (it is the only one)'.format(im_id, major_class))
+                with open(os.path.join(args.output_path, '{}drop_outliers.txt'.format(args.new_prefix)), 'a') as f:
+                    f.write('{}\n'.format(im_id))
+                continue
+            else:
+                new_data[im_id] = new_im
+                mode2s = 'Dropped {}: {}x'.format(major_class, dropped_times)
         elif modification == 'null_tags':
             for detection in im['labels']:
                 detection['class'] = ''
@@ -190,37 +190,10 @@ def edit_data(_data, modification, start_idx=0):
         else:
             return -1
 
-        # if int(edit_rect) > 0:
-        #     pass
-        # if int(edit_feat) > 0:
-        #     old_feats = im['features']
-        #     new_feats = np.empty(shape=np.shape(im['features']), dtype=float)
-        #     for i in range(len(new_feats)):
-        #         new_feats[i] = 0#abs(old_feats[i]+1e-100)#random.uniform(-old_feats[i]/10, old_feats[i]/10))
-        #     # print('Features edited')
-        #     # print('old features shape: {}'.format(np.shape(old_feats)))
-        #     # print(type(old_feats))
-        #     # print('new features shape: {}'.format(np.shape(new_feats)))
-        #     # print(type(new_feats))
-        #     im['features'] = new_feats
-        #
-        # if int(edit_class) > 0:
-        #     with open(args.coco_classnames, 'r') as f:
-        #         content = f.read()
-        #     coco_classnames = ast.literal_eval(content)
-        #     for detection in im['labels']:
-        #         random_class = random.randint(1, len(coco_classnames) - 1)
-        #         detection['class'] = coco_classnames[random_class]
-        # if int(edit_conf) > 0:
-        #     for detection in im['labels']:
-        #         random_conf = random.uniform(0, 1)
-        #         detection['conf'] = random_conf
-        new_data[str(im_idx + new_idx)] = new_data.pop(im_id)
         with open(args.edited_images_ids, 'a') as f:
-            info = {'original_id': im_id, 'new_id': str(im_idx + new_idx), 'settings': modification, 'mode2s': mode2s}
+            info = {'original_id': im_id, 'settings': modification, 'mode2s': mode2s}
             f.write('{}\n'.format(json.dumps(info)))
-        new_idx += 1
-    return new_data, new_idx
+    return new_data
 
 
 if __name__ == '__main__':
@@ -231,48 +204,23 @@ if __name__ == '__main__':
     feature_file = os.path.join(args.input_path, '{}feature.tsv'.format(args.old_prefix))
 
     data = load_data(label_file=label_file, feature_file=feature_file)
-    prep_files(data)
+    prep_files()
     print('Files prepared in: {}'.format(args.output_path))
 
-    # edits_rect = [0]
-    # edits_feat = [0, 1]
-    # edits_class = [0,1]
-    # edits_conf = [0]
     result_data = dict(data)
     max_idx = max([int(x) for x in result_data])
     new_idx = -1
     with open(args.edited_images_ids, 'w') as f:
         pass
-    # modifications = ['drop_some', 'null_tags', 'null_feats', 'null_feats_change_class']
-    modifications = ['null_tags']
-    for mode in modifications:
-        if new_idx < 0:
-            edited_data, new_idx = edit_data(data, modification=mode, start_idx=max_idx + 1)
-        else:
-            edited_data, new_idx = edit_data(data, modification=mode, start_idx=new_idx + 1)
-        if edited_data == -1:
-            continue
+
+    modifications = ['drop_major', 'null_tags', 'null_feats', 'null_feats_change_class']
+    if args.modification not in modifications:
+        print('Modification {} no found. Try on of following ones: drop_major, null_tags, null_feats, null_feats_change_class'.format(args.modification))
+    mode = args.modification
+
+    edited_data = edit_data(data, modification=mode)
+    if edited_data != -1:
         save_data(edited_data)
-        # result_data.update(edited_data)
-    # for edit_rect in edits_rect:
-    #     for edit_feat in edits_feat:
-    #         for edit_class in edits_class:
-    #             for edit_conf in edits_conf:
-    #                 if np.sum([edit_rect, edit_feat, edit_class, edit_conf]) == 0:
-    #                     print('Skipping setting with no edit')
-    #                     continue
-    #                 print('Editing for rect: {},  Feat: {}, Class: {}, Conf: {}'.format(edit_rect, edit_feat,
-    #                                                                                     edit_class, edit_conf))
-    #                 edited_data = edit_data(data, edit_rect=edit_rect, edit_feat=edit_feat, edit_class=edit_class,
-    #                                         edit_conf=edit_conf, start_idx=max([int(x) for x in result_data]) + 1)
-    #
-    #                 result_data.update(edited_data)
-
-    # print(data['0'])
-    # print(len(data.keys()))
-    #
-    # print(result_data['0'])
-    # print(len(result_data.keys()))
-
-    # save_data(result_data)
-    print('Edited data saved to {}'.format(args.output_path))
+        print('Edited data saved to {}'.format(args.output_path))
+    else:
+        print('No data was created')
