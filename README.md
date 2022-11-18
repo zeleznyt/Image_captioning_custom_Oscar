@@ -1,4 +1,4 @@
-# Notice:
+# Notice!
 
 Work on this project was moved to [other repository](https://github.com/zeleznyt/Oscar). 
 This repository is outdated and will no longer be updated. 
