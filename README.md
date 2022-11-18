@@ -1,3 +1,8 @@
+# Notice:
+
+Work on this project was moved to [other repository](https://github.com/zeleznyt/Oscar). 
+This repository is outdated and will no longer be updated. 
+
 # Image captioning pipeline based on Oscar
 
 This repository contains source codes I used in my master thesis Image Captioning using Deep Learning. 
